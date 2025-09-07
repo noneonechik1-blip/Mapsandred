@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Управление светофорами Актобе</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <!-- Добавляем Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
     <style>
+        /* Ваши существующие стили остаются без изменений */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -274,6 +278,15 @@
             flex: 1;
         }
         
+        .storage-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9eef5;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
         @media (max-width: 768px) {
             .main-content {
                 flex-direction: column;
@@ -352,6 +365,11 @@
                     <button id="delete-light" style="display: none; background: #ff4757;">Удалить светофор</button>
                 </div>
                 
+                <div class="storage-info">
+                    <p>Данные сохраняются в Firebase Realtime Database</p>
+                    <button id="clear-storage" style="background: #ff4757; margin-top: 5px;">Очистить все данные</button>
+                </div>
+                
                 <div class="traffic-list">
                     <h2>Активные светофоры</h2>
                     <div id="lights-container">
@@ -368,6 +386,7 @@
                         <li>Настройте длительность сигналов и нажмите "Добавить светофор"</li>
                         <li>Для редактирования нажмите "Редактировать" в списке или кликните на светофор на карте</li>
                         <li>Для удаления нажмите "Удалить" в списке или используйте кнопку удаления в режиме редактирования</li>
+                        <li>Все данные автоматически сохраняются в Firebase</li>
                     </ul>
                 </div>
             </div>
@@ -377,6 +396,21 @@
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Конфигурация Firebase
+            const firebaseConfig = {
+                apiKey: "AIzaSyAYUDlf8xv-uOyz0qcWi9iK2_837OK84mg",
+                authDomain: "mapsandpass.firebaseapp.com",
+                projectId: "mapsandpass",
+                storageBucket: "mapsandpass.firebasestorage.app",
+                messagingSenderId: "985446917647",
+                appId: "1:985446917647:web:372aaad11f1607ed1ea57a",
+                measurementId: "G-G46S0Y6V1K"
+            };
+
+            // Инициализация Firebase
+            firebase.initializeApp(firebaseConfig);
+            const database = firebase.database();
+            
             // Инициализация карты с центром в Актобе
             const map = L.map('map').setView([50.2839, 57.1667], 13);
             
@@ -389,6 +423,7 @@
             const updateButton = document.getElementById('update-light');
             const cancelButton = document.getElementById('cancel-edit');
             const deleteButton = document.getElementById('delete-light');
+            const clearStorageButton = document.getElementById('clear-storage');
             const lightsContainer = document.getElementById('lights-container');
             const currentSelection = document.getElementById('current-selection');
             const editMode = document.getElementById('edit-mode');
@@ -415,6 +450,32 @@
                     this.classList.add('selected');
                     currentColor = this.getAttribute('data-color');
                 });
+            });
+            
+            // Обработчик кнопки очистки базы данных
+            clearStorageButton.addEventListener('click', function() {
+                if (confirm("Вы уверены, что хотите удалить все данные светофоров? Это действие нельзя отменить.")) {
+                    // Удаляем все данные из Firebase
+                    database.ref('trafficLights').remove()
+                        .then(() => {
+                            console.log("Все данные удалены из Firebase");
+                            // Очищаем локальные данные
+                            for (const id in lights) {
+                                if (lights[id].marker && lights[id].marker.remove) {
+                                    lights[id].marker.remove();
+                                }
+                                if (lights[id].intervalId) {
+                                    clearInterval(lights[id].intervalId);
+                                }
+                            }
+                            lights = {};
+                            lightsContainer.innerHTML = '';
+                        })
+                        .catch(error => {
+                            console.error("Ошибка при удалении данных: ", error);
+                            alert("Не удалось удалить данные: " + error.message);
+                        });
+                }
             });
             
             // Обработчик клика по карте для выбора места
@@ -520,9 +581,75 @@
                 }
             });
             
+            // Функция сохранения светофоров в Firebase
+            function saveTrafficLights() {
+                const lightsToSave = {};
+                
+                for (const id in lights) {
+                    const light = lights[id];
+                    lightsToSave[id] = {
+                        id: light.id,
+                        address: light.address,
+                        latlng: light.latlng,
+                        redTime: light.redTime,
+                        greenTime: light.greenTime,
+                        currentColor: light.currentColor,
+                        timeLeft: light.timeLeft
+                    };
+                }
+                
+                // Сохраняем в Firebase
+                database.ref('trafficLights').set(lightsToSave)
+                    .then(() => {
+                        console.log('Данные светофоров сохранены в Firebase');
+                    })
+                    .catch(error => {
+                        console.error('Ошибка сохранения данных в Firebase: ', error);
+                    });
+            }
+            
+            // Функция загрузки светофоров из Firebase
+            function loadTrafficLights() {
+                database.ref('trafficLights').on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    
+                    if (data) {
+                        // Очищаем текущие светофоры
+                        for (const id in lights) {
+                            if (lights[id].marker) {
+                                map.removeLayer(lights[id].marker);
+                            }
+                            if (lights[id].intervalId) {
+                                clearInterval(lights[id].intervalId);
+                            }
+                        }
+                        lights = {};
+                        lightsContainer.innerHTML = '';
+                        
+                        // Добавляем светофоры из базы данных
+                        for (const id in data) {
+                            const lightData = data[id];
+                            createTrafficLight(
+                                L.latLng(lightData.latlng.lat, lightData.latlng.lng),
+                                lightData.address,
+                                lightData.redTime,
+                                lightData.greenTime,
+                                lightData.currentColor,
+                                lightData.timeLeft,
+                                id // передаем существующий ID
+                            );
+                        }
+                        
+                        console.log('Данные светофоров загружены из Firebase');
+                    }
+                }, (error) => {
+                    console.error('Ошибка загрузки данных из Firebase:', error);
+                });
+            }
+            
             // Функция создания светофора
-            function createTrafficLight(latlng, address, redTime, greenTime, color, timeLeft) {
-                const id = 'light_' + Date.now();
+            function createTrafficLight(latlng, address, redTime, greenTime, color, timeLeft, id = null) {
+                const lightId = id || 'light_' + Date.now();
                 
                 // Определяем цвет иконки
                 const iconColor = color === 'red' ? '#ff4757' : '#2ed573';
@@ -550,7 +677,7 @@
                 
                 // Обработчик клика на маркер для редактирования
                 marker.on('click', function(e) {
-                    editTrafficLight(id);
+                    editTrafficLight(lightId);
                     // Останавливаем распространение события, чтобы не активировался клик по карте
                     L.DomEvent.stopPropagation(e);
                 });
@@ -558,12 +685,12 @@
                 // Обработчик перемещения маркера
                 marker.on('dragend', function() {
                     const newLatLng = marker.getLatLng();
-                    moveTrafficLight(id, newLatLng);
+                    moveTrafficLight(lightId, newLatLng);
                 });
                 
                 // Сохраняем данные о светофоре
-                lights[id] = {
-                    id: id,
+                lights[lightId] = {
+                    id: lightId,
                     address: address,
                     latlng: latlng,
                     redTime: redTime,
@@ -575,11 +702,14 @@
                 };
                 
                 // Добавляем в список
-                addToLightsList(id);
+                addToLightsList(lightId);
+                
+                // Сохраняем данные в Firebase
+                saveTrafficLights();
                 
                 // Запускаем таймер, если время больше 0
                 if (timeLeft > 0) {
-                    startTrafficLightTimer(id);
+                    startTrafficLightTimer(lightId);
                 }
             }
             
@@ -618,6 +748,9 @@
                 // Обновляем отображение в списке
                 updateLightDisplay(id);
                 
+                // Сохраняем данные в Firebase
+                saveTrafficLights();
+                
                 // Запускаем таймер, если время больше 0
                 if (timeLeft > 0) {
                     startTrafficLightTimer(id);
@@ -630,6 +763,7 @@
                 
                 // Обновляем координаты
                 light.latlng = newLatLng;
+                light.marker.setLatLng(newLatLng);
                 
                 // Запрашиваем новый адрес
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLatLng.lat}&lon=${newLatLng.lng}&accept-language=ru`)
@@ -647,6 +781,9 @@
                         
                         // Обновляем отображение в списке
                         updateLightDisplay(id);
+                        
+                        // Сохраняем данные в Firebase
+                        saveTrafficLights();
                         
                         // Если светофор в режиме редактирования, обновляем форму
                         if (editingLightId === id) {
@@ -833,6 +970,9 @@
                         
                         // Обновляем отображение
                         updateLightDisplay(id);
+                        
+                        // Сохраняем данные в Firebase при смене цвета
+                        saveTrafficLights();
                     }
                 }, 1000);
             }
@@ -877,6 +1017,9 @@
                 // Удаляем из хранилища
                 delete lights[id];
                 
+                // Сохраняем данные в Firebase
+                saveTrafficLights();
+                
                 // Если удаляли редактируемый светофор, выходим из режима редактирования
                 if (editingLightId === id) {
                     resetForm();
@@ -884,9 +1027,14 @@
                 }
             }
             
-            // Добавим несколько демонстрационных светофоров
+            // Загружаем сохраненные светофоры при запуске
+            loadTrafficLights();
+            
+            // Добавим несколько демонстрационных светофоров, если нет сохраненных
             setTimeout(() => {
-                createDemoLights();
+                if (Object.keys(lights).length === 0) {
+                    createDemoLights();
+                }
             }, 1000);
             
             function createDemoLights() {
