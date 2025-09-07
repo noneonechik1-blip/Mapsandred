@@ -318,20 +318,11 @@
                     <input type="number" id="time-left" min="0" value="30">
                 </div>
                 
-                <div class="form-group">
-                    <label for="red-time">Длительность красного сигнала (сек):</label>
-                    <input type="number" id="red-time" min="5" value="30">
-                </div>
-                
-                <div class="form-group">
-                    <label for="green-time">Длительность зеленого сигнала (сек):</label>
-                    <input type="number" id="green-time" min="5" value="40">
-                </div>
-                
                 <div class="button-group">
                     <button id="add-light">Добавить светофор</button>
                     <button id="update-light" style="display: none;">Сохранить изменения</button>
                     <button id="cancel-edit" style="display: none;">Отменить</button>
+                    <button id="delete-light" style="display: none; background: #ff4757;">Удалить светофор</button>
                 </div>
                 
                 <div class="traffic-list">
@@ -347,9 +338,9 @@
                         <li>Кликните на карте, где нужно разместить светофор</li>
                         <li>Адрес определится автоматически</li>
                         <li>Выберите текущий цвет и оставшееся время</li>
-                        <li>Настройте длительность сигналов и нажмите "Добавить светофор"</li>
+                        <li>Нажмите "Добавить светофор"</li>
                         <li>Для редактирования нажмите "Редактировать" в списке или кликните на светофор на карте</li>
-                        <li>Для перемещения нажмите "Переместить" и кликните на новое место на карте</li>
+                        <li>Для удаления нажмите "Удалить" в списке или используйте кнопку удаления в режиме редактирования</li>
                     </ul>
                 </div>
             </div>
@@ -370,6 +361,7 @@
             const addButton = document.getElementById('add-light');
             const updateButton = document.getElementById('update-light');
             const cancelButton = document.getElementById('cancel-edit');
+            const deleteButton = document.getElementById('delete-light');
             const lightsContainer = document.getElementById('lights-container');
             const currentSelection = document.getElementById('current-selection');
             const editMode = document.getElementById('edit-mode');
@@ -434,8 +426,6 @@
                 }
                 
                 const address = document.getElementById('light-address').value;
-                const redTime = parseInt(document.getElementById('red-time').value);
-                const greenTime = parseInt(document.getElementById('green-time').value);
                 const timeLeft = parseInt(timeLeftInput.value);
                 
                 if (!address) {
@@ -443,13 +433,8 @@
                     return;
                 }
                 
-                if (redTime < 5 || greenTime < 5) {
-                    alert("Время сигнала должно быть не менее 5 секунд");
-                    return;
-                }
-                
-                // Создаем светофор
-                createTrafficLight(selectedLatLng, address, redTime, greenTime, currentColor, timeLeft);
+                // Создаем светофор с фиксированными длительностями сигналов
+                createTrafficLight(selectedLatLng, address, 30, 40, currentColor, timeLeft);
                 
                 // Сбрасываем форму
                 resetForm();
@@ -460,8 +445,6 @@
                 if (!editingLightId) return;
                 
                 const address = document.getElementById('light-address').value;
-                const redTime = parseInt(document.getElementById('red-time').value);
-                const greenTime = parseInt(document.getElementById('green-time').value);
                 const timeLeft = parseInt(timeLeftInput.value);
                 
                 if (!address) {
@@ -469,13 +452,9 @@
                     return;
                 }
                 
-                if (redTime < 5 || greenTime < 5) {
-                    alert("Время сигнала должно быть не менее 5 секунд");
-                    return;
-                }
-                
-                // Обновляем светофор
-                updateTrafficLight(editingLightId, address, redTime, greenTime, currentColor, timeLeft);
+                // Обновляем светофор (длительности сигналов остаются прежними)
+                const light = lights[editingLightId];
+                updateTrafficLight(editingLightId, address, light.redTime, light.greenTime, currentColor, timeLeft);
                 
                 // Сбрасываем форму
                 resetForm();
@@ -486,6 +465,17 @@
             cancelButton.addEventListener('click', function() {
                 resetForm();
                 exitEditMode();
+            });
+            
+            // Обработчик кнопки удаления светофора
+            deleteButton.addEventListener('click', function() {
+                if (!editingLightId) return;
+                
+                if (confirm("Вы уверены, что хотите удалить этот светофор?")) {
+                    deleteTrafficLight(editingLightId);
+                    resetForm();
+                    exitEditMode();
+                }
             });
             
             // Функция создания светофора
@@ -512,7 +502,6 @@
                 // Добавляем всплывающую подсказку
                 marker.bindPopup(`
                     <strong>${address}</strong><br>
-                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
                     Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
                 `);
                 
@@ -562,8 +551,6 @@
                 
                 // Обновляем данные
                 light.address = address;
-                light.redTime = redTime;
-                light.greenTime = greenTime;
                 light.currentColor = color;
                 light.timeLeft = timeLeft;
                 
@@ -579,7 +566,6 @@
                 // Обновляем всплывающую подсказку
                 light.marker.setPopupContent(`
                     <strong>${address}</strong><br>
-                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
                     Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
                 `);
                 
@@ -609,7 +595,6 @@
                         // Обновляем всплывающую подсказку
                         light.marker.setPopupContent(`
                             <strong>${address}</strong><br>
-                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сек<br>
                             Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
                         `);
                         
@@ -643,7 +628,6 @@
                     <div class="timer">Осталось: ${light.timeLeft}с</div>
                     <div class="status status-${light.currentColor}">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</div>
                     <button class="edit-btn" data-id="${id}">Редактировать</button>
-                    <button class="move-btn" data-id="${id}">Переместить</button>
                     <button class="delete-btn" data-id="${id}">Удалить</button>
                 `;
                 
@@ -652,11 +636,6 @@
                 // Обработчик редактирования
                 item.querySelector('.edit-btn').addEventListener('click', function() {
                     editTrafficLight(id);
-                });
-                
-                // Обработчик перемещения
-                item.querySelector('.move-btn').addEventListener('click', function() {
-                    startMovingLight(id);
                 });
                 
                 // Обработчик удаления
@@ -686,7 +665,9 @@
                 
                 // Снимаем выделение со всех маркеров
                 for (const lightId in lights) {
-                    lights[lightId].marker._icon.classList.remove('selected');
+                    if (lights[lightId].marker && lights[lightId].marker._icon) {
+                        lights[lightId].marker._icon.classList.remove('selected');
+                    }
                 }
                 
                 // Выделяем маркер текущего светофора
@@ -697,8 +678,6 @@
                 
                 // Заполняем форму данными светофора
                 document.getElementById('light-address').value = light.address;
-                document.getElementById('red-time').value = light.redTime;
-                document.getElementById('green-time').value = light.greenTime;
                 timeLeftInput.value = light.timeLeft;
                 
                 // Устанавливаем текущий цвет
@@ -717,21 +696,10 @@
                 addButton.style.display = 'none';
                 updateButton.style.display = 'block';
                 cancelButton.style.display = 'block';
+                deleteButton.style.display = 'block';
                 
                 // Центрируем карту на выбранном светофоре
                 map.setView(light.latlng, map.getZoom());
-            }
-            
-            // Функция начала перемещения светофора
-            function startMovingLight(id) {
-                movingLightId = id;
-                alert('Режим перемещения: перетащите светофор на новое место или кликните на карте для перемещения');
-                
-                // Выделяем маркер для перемещения
-                for (const lightId in lights) {
-                    lights[lightId].marker._icon.classList.remove('selected');
-                }
-                lights[id].marker._icon.classList.add('selected');
             }
             
             // Функция выхода из режима редактирования
@@ -754,13 +722,12 @@
                 addButton.style.display = 'block';
                 updateButton.style.display = 'none';
                 cancelButton.style.display = 'none';
+                deleteButton.style.display = 'none';
             }
             
             // Функция сброса формы
             function resetForm() {
                 document.getElementById('light-address').value = '';
-                document.getElementById('red-time').value = '30';
-                document.getElementById('green-time').value = '40';
                 timeLeftInput.value = '30';
                 
                 colorOptions.forEach(opt => opt.classList.remove('selected'));
@@ -808,7 +775,6 @@
                         // Обновляем всплывающую подсказку
                         light.marker.setPopupContent(`
                             <strong>${light.address}</strong><br>
-                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сек<br>
                             Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
                         `);
                         
@@ -844,7 +810,7 @@
                     clearInterval(light.intervalId);
                 }
                 
-                // Удаляем с карты
+                // Удаляем с карта
                 if (light.marker && light.marker.remove) {
                     light.marker.remove();
                 }
@@ -873,15 +839,15 @@
             function createDemoLights() {
                 // Демонстрационные светофоры на основных перекрестках Актобе
                 const demoLights = [
-                    {lat: 50.2810, lng: 57.1720, address: "пр. Абилкайыр хана / ул. Айтеке би", red: 35, green: 45, color: "red", timeLeft: 15},
-                    {lat: 50.2805, lng: 57.1560, address: "пр. Алии Молдагуловой / ул. Жубанова", red: 40, green: 30, color: "green", timeLeft: 7},
-                    {lat: 50.2890, lng: 57.1480, address: "ул. Маресьева / ул. Рыскулова", red: 30, green: 40, color: "red", timeLeft: 25},
+                    {lat: 50.2810, lng: 57.1720, address: "пр. Абилкайыр хана / ул. Айтеке би", color: "red", timeLeft: 15},
+                    {lat: 50.2805, lng: 57.1560, address: "пр. Алии Молдагуловой / ул. Жубанова", color: "green", timeLeft: 7},
+                    {lat: 50.2890, lng: 57.1480, address: "ул. Маресьева / ул. Рыскулова", color: "red", timeLeft: 25},
                 ];
                 
                 demoLights.forEach((demo, index) => {
                     setTimeout(() => {
                         const latlng = L.latLng(demo.lat, demo.lng);
-                        createTrafficLight(latlng, demo.address, demo.red, demo.green, demo.color, demo.timeLeft);
+                        createTrafficLight(latlng, demo.address, 30, 40, demo.color, demo.timeLeft);
                     }, index * 300);
                 });
             }
