@@ -122,6 +122,12 @@
             margin-bottom: 10px;
             border-radius: 6px;
             border-left: 4px solid #4a6491;
+            transition: all 0.3s;
+        }
+        
+        .traffic-item.selected {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
         }
         
         .timer {
@@ -193,6 +199,13 @@
             border-radius: 50%;
             border: 2px solid white;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s;
+        }
+        
+        .traffic-icon.selected {
+            transform: scale(1.3);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+            z-index: 1000;
         }
         
         .current-selection {
@@ -335,7 +348,7 @@
                         <li>Адрес определится автоматически</li>
                         <li>Выберите текущий цвет и оставшееся время</li>
                         <li>Настройте длительность сигналов и нажмите "Добавить светофор"</li>
-                        <li>Для редактирования нажмите "Редактировать" в списке</li>
+                        <li>Для редактирования нажмите "Редактировать" в списке или кликните на светофор на карте</li>
                         <li>Для перемещения нажмите "Переместить" и кликните на новое место на карте</li>
                     </ul>
                 </div>
@@ -491,7 +504,10 @@
                 });
                 
                 // Добавляем маркер на карту
-                const marker = L.marker(latlng, { icon: trafficIcon }).addTo(map);
+                const marker = L.marker(latlng, { 
+                    icon: trafficIcon,
+                    draggable: true // Делаем маркер перетаскиваемым
+                }).addTo(map);
                 
                 // Добавляем всплывающую подсказку
                 marker.bindPopup(`
@@ -499,6 +515,19 @@
                     Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
                     Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
                 `);
+                
+                // Обработчик клика на маркер для редактирования
+                marker.on('click', function(e) {
+                    editTrafficLight(id);
+                    // Останавливаем распространение события, чтобы не активировался клик по карте
+                    L.DomEvent.stopPropagation(e);
+                });
+                
+                // Обработчик перемещения маркера
+                marker.on('dragend', function() {
+                    const newLatLng = marker.getLatLng();
+                    moveTrafficLight(id, newLatLng);
+                });
                 
                 // Сохраняем данные о светофоре
                 lights[id] = {
@@ -570,9 +599,6 @@
                 // Обновляем координаты
                 light.latlng = newLatLng;
                 
-                // Перемещаем маркер
-                light.marker.setLatLng(newLatLng);
-                
                 // Запрашиваем новый адрес
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLatLng.lat}&lon=${newLatLng.lng}&accept-language=ru`)
                     .then(response => response.json())
@@ -611,6 +637,7 @@
                 
                 const item = document.createElement('div');
                 item.className = 'traffic-item';
+                item.setAttribute('data-id', id);
                 item.innerHTML = `
                     <h3>${light.address}</h3>
                     <div class="timer">Осталось: ${light.timeLeft}с</div>
@@ -636,11 +663,34 @@
                 item.querySelector('.delete-btn').addEventListener('click', function() {
                     deleteTrafficLight(id);
                 });
+                
+                // Обработчик клика на элемент списка
+                item.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'BUTTON') {
+                        editTrafficLight(id);
+                    }
+                });
             }
             
             // Функция редактирования светофора
             function editTrafficLight(id) {
                 const light = lights[id];
+                
+                // Снимаем выделение со всех элементов
+                document.querySelectorAll('.traffic-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                // Выделяем текущий элемент
+                document.querySelector(`.traffic-item[data-id="${id}"]`).classList.add('selected');
+                
+                // Снимаем выделение со всех маркеров
+                for (const lightId in lights) {
+                    lights[lightId].marker._icon.classList.remove('selected');
+                }
+                
+                // Выделяем маркер текущего светофора
+                light.marker._icon.classList.add('selected');
                 
                 // Входим в режим редактирования
                 editingLightId = id;
@@ -667,16 +717,37 @@
                 addButton.style.display = 'none';
                 updateButton.style.display = 'block';
                 cancelButton.style.display = 'block';
+                
+                // Центрируем карту на выбранном светофоре
+                map.setView(light.latlng, map.getZoom());
             }
             
             // Функция начала перемещения светофора
             function startMovingLight(id) {
                 movingLightId = id;
-                alert('Режим перемещения: кликните на карте в новом месте для светофора');
+                alert('Режим перемещения: перетащите светофор на новое место или кликните на карте для перемещения');
+                
+                // Выделяем маркер для перемещения
+                for (const lightId in lights) {
+                    lights[lightId].marker._icon.classList.remove('selected');
+                }
+                lights[id].marker._icon.classList.add('selected');
             }
             
             // Функция выхода из режима редактирования
             function exitEditMode() {
+                // Снимаем выделение со всех элементов
+                document.querySelectorAll('.traffic-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                // Снимаем выделение со всех маркеров
+                for (const lightId in lights) {
+                    if (lights[lightId].marker && lights[lightId].marker._icon) {
+                        lights[lightId].marker._icon.classList.remove('selected');
+                    }
+                }
+                
                 editingLightId = null;
                 editMode.style.display = 'none';
                 formTitle.textContent = 'Настройки светофора';
@@ -750,20 +821,16 @@
             // Функция обновления отображения светофора
             function updateLightDisplay(id) {
                 const light = lights[id];
-                const items = document.querySelectorAll('.traffic-item');
+                const item = document.querySelector(`.traffic-item[data-id="${id}"]`);
                 
-                for (let item of items) {
-                    const editBtn = item.querySelector('.edit-btn');
-                    if (editBtn && editBtn.getAttribute('data-id') === id) {
-                        const timer = item.querySelector('.timer');
-                        const status = item.querySelector('.status');
-                        
-                        if (timer) timer.textContent = `Осталось: ${light.timeLeft}с`;
-                        if (status) {
-                            status.textContent = light.currentColor === 'red' ? 'Красный' : 'Зеленый';
-                            status.className = `status status-${light.currentColor}`;
-                        }
-                        break;
+                if (item) {
+                    const timer = item.querySelector('.timer');
+                    const status = item.querySelector('.status');
+                    
+                    if (timer) timer.textContent = `Осталось: ${light.timeLeft}с`;
+                    if (status) {
+                        status.textContent = light.currentColor === 'red' ? 'Красный' : 'Зеленый';
+                        status.className = `status status-${light.currentColor}`;
                     }
                 }
             }
@@ -783,13 +850,9 @@
                 }
                 
                 // Удаляем из списка
-                const items = document.querySelectorAll('.traffic-item');
-                for (let item of items) {
-                    const editBtn = item.querySelector('.edit-btn');
-                    if (editBtn && editBtn.getAttribute('data-id') === id) {
-                        item.parentNode.removeChild(item);
-                        break;
-                    }
+                const item = document.querySelector(`.traffic-item[data-id="${id}"]`);
+                if (item) {
+                    item.remove();
                 }
                 
                 // Удаляем из хранилища
