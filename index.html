@@ -254,6 +254,17 @@
             display: none;
         }
         
+        .duration-settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .duration-group {
+            margin-bottom: 0;
+        }
+        
         .button-group {
             display: flex;
             gap: 10px;
@@ -270,6 +281,10 @@
             
             .button-group {
                 flex-direction: column;
+            }
+            
+            .duration-settings {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -318,6 +333,18 @@
                     <input type="number" id="time-left" min="0" value="30">
                 </div>
                 
+                <div class="duration-settings">
+                    <div class="duration-group">
+                        <label for="red-time">Длительность красного (сек):</label>
+                        <input type="number" id="red-time" min="5" value="30">
+                    </div>
+                    
+                    <div class="duration-group">
+                        <label for="green-time">Длительность зеленого (сек):</label>
+                        <input type="number" id="green-time" min="5" value="40">
+                    </div>
+                </div>
+                
                 <div class="button-group">
                     <button id="add-light">Добавить светофор</button>
                     <button id="update-light" style="display: none;">Сохранить изменения</button>
@@ -338,7 +365,7 @@
                         <li>Кликните на карте, где нужно разместить светофор</li>
                         <li>Адрес определится автоматически</li>
                         <li>Выберите текущий цвет и оставшееся время</li>
-                        <li>Нажмите "Добавить светофор"</li>
+                        <li>Настройте длительность сигналов и нажмите "Добавить светофор"</li>
                         <li>Для редактирования нажмите "Редактировать" в списке или кликните на светофор на карте</li>
                         <li>Для удаления нажмите "Удалить" в списке или используйте кнопку удаления в режиме редактирования</li>
                     </ul>
@@ -372,6 +399,8 @@
             const formTitle = document.getElementById('form-title');
             const colorOptions = document.querySelectorAll('.color-option');
             const timeLeftInput = document.getElementById('time-left');
+            const redTimeInput = document.getElementById('red-time');
+            const greenTimeInput = document.getElementById('green-time');
             
             let lights = {};
             let selectedLatLng = null;
@@ -427,14 +456,21 @@
                 
                 const address = document.getElementById('light-address').value;
                 const timeLeft = parseInt(timeLeftInput.value);
+                const redTime = parseInt(redTimeInput.value);
+                const greenTime = parseInt(greenTimeInput.value);
                 
                 if (!address) {
                     alert("Пожалуйста, укажите адрес светофора");
                     return;
                 }
                 
-                // Создаем светофор с фиксированными длительностями сигналов
-                createTrafficLight(selectedLatLng, address, 30, 40, currentColor, timeLeft);
+                if (redTime < 5 || greenTime < 5) {
+                    alert("Длительность сигнала должна быть не менее 5 секунд");
+                    return;
+                }
+                
+                // Создаем светофор
+                createTrafficLight(selectedLatLng, address, redTime, greenTime, currentColor, timeLeft);
                 
                 // Сбрасываем форму
                 resetForm();
@@ -446,15 +482,21 @@
                 
                 const address = document.getElementById('light-address').value;
                 const timeLeft = parseInt(timeLeftInput.value);
+                const redTime = parseInt(redTimeInput.value);
+                const greenTime = parseInt(greenTimeInput.value);
                 
                 if (!address) {
                     alert("Пожалуйста, укажите адрес светофора");
                     return;
                 }
                 
-                // Обновляем светофор (длительности сигналов остаются прежними)
-                const light = lights[editingLightId];
-                updateTrafficLight(editingLightId, address, light.redTime, light.greenTime, currentColor, timeLeft);
+                if (redTime < 5 || greenTime < 5) {
+                    alert("Длительность сигнала должна быть не менее 5 секунд");
+                    return;
+                }
+                
+                // Обновляем светофор
+                updateTrafficLight(editingLightId, address, redTime, greenTime, currentColor, timeLeft);
                 
                 // Сбрасываем форму
                 resetForm();
@@ -502,6 +544,7 @@
                 // Добавляем всплывающую подсказку
                 marker.bindPopup(`
                     <strong>${address}</strong><br>
+                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
                     Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
                 `);
                 
@@ -551,6 +594,8 @@
                 
                 // Обновляем данные
                 light.address = address;
+                light.redTime = redTime;
+                light.greenTime = greenTime;
                 light.currentColor = color;
                 light.timeLeft = timeLeft;
                 
@@ -566,6 +611,7 @@
                 // Обновляем всплывающую подсказку
                 light.marker.setPopupContent(`
                     <strong>${address}</strong><br>
+                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
                     Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
                 `);
                 
@@ -595,6 +641,7 @@
                         // Обновляем всплывающую подсказку
                         light.marker.setPopupContent(`
                             <strong>${address}</strong><br>
+                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сек<br>
                             Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
                         `);
                         
@@ -627,6 +674,7 @@
                     <h3>${light.address}</h3>
                     <div class="timer">Осталось: ${light.timeLeft}с</div>
                     <div class="status status-${light.currentColor}">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</div>
+                    <div><small>Красный: ${light.redTime}с, Зеленый: ${light.greenTime}с</small></div>
                     <button class="edit-btn" data-id="${id}">Редактировать</button>
                     <button class="delete-btn" data-id="${id}">Удалить</button>
                 `;
@@ -679,6 +727,8 @@
                 // Заполняем форму данными светофора
                 document.getElementById('light-address').value = light.address;
                 timeLeftInput.value = light.timeLeft;
+                redTimeInput.value = light.redTime;
+                greenTimeInput.value = light.greenTime;
                 
                 // Устанавливаем текущий цвет
                 colorOptions.forEach(opt => opt.classList.remove('selected'));
@@ -729,6 +779,8 @@
             function resetForm() {
                 document.getElementById('light-address').value = '';
                 timeLeftInput.value = '30';
+                redTimeInput.value = '30';
+                greenTimeInput.value = '40';
                 
                 colorOptions.forEach(opt => opt.classList.remove('selected'));
                 document.querySelector('.color-option.red').classList.add('selected');
@@ -775,6 +827,7 @@
                         // Обновляем всплывающую подсказку
                         light.marker.setPopupContent(`
                             <strong>${light.address}</strong><br>
+                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сек<br>
                             Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
                         `);
                         
@@ -810,7 +863,7 @@
                     clearInterval(light.intervalId);
                 }
                 
-                // Удаляем с карта
+                // Удаляем с карты
                 if (light.marker && light.marker.remove) {
                     light.marker.remove();
                 }
@@ -839,15 +892,15 @@
             function createDemoLights() {
                 // Демонстрационные светофоры на основных перекрестках Актобе
                 const demoLights = [
-                    {lat: 50.2810, lng: 57.1720, address: "пр. Абилкайыр хана / ул. Айтеке би", color: "red", timeLeft: 15},
-                    {lat: 50.2805, lng: 57.1560, address: "пр. Алии Молдагуловой / ул. Жубанова", color: "green", timeLeft: 7},
-                    {lat: 50.2890, lng: 57.1480, address: "ул. Маресьева / ул. Рыскулова", color: "red", timeLeft: 25},
+                    {lat: 50.2810, lng: 57.1720, address: "пр. Абилкайыр хана / ул. Айтеке би", red: 35, green: 45, color: "red", timeLeft: 15},
+                    {lat: 50.2805, lng: 57.1560, address: "пр. Алии Молдагуловой / ул. Жубанова", red: 40, green: 30, color: "green", timeLeft: 7},
+                    {lat: 50.2890, lng: 57.1480, address: "ул. Маресьева / ул. Рыскулова", red: 30, green: 40, color: "red", timeLeft: 25},
                 ];
                 
                 demoLights.forEach((demo, index) => {
                     setTimeout(() => {
                         const latlng = L.latLng(demo.lat, demo.lng);
-                        createTrafficLight(latlng, demo.address, 30, 40, demo.color, demo.timeLeft);
+                        createTrafficLight(latlng, demo.address, demo.red, demo.green, demo.color, demo.timeLeft);
                     }, index * 300);
                 });
             }
