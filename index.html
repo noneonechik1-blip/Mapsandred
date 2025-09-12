@@ -339,6 +339,23 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Новые стили для отображения времени до смены цвета */
+        .time-until-change {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .popup-content {
+            min-width: 200px;
+        }
+        
+        .popup-timer {
+            font-weight: bold;
+            margin: 5px 0;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -675,7 +692,7 @@
                 exitEditMode();
             });
             
-            // Обработчик кнопки отмены редактирования
+            // Обработчик кнопки отмена редактирования
             cancelButton.addEventListener('click', function() {
                 resetForm();
                 exitEditMode();
@@ -737,12 +754,8 @@
                     draggable: true // Делаем маркер перетаскиваемым
                 }).addTo(map);
                 
-                // Добавляем всплывающую подсказку
-                marker.bindPopup(`
-                    <strong>${address}</strong><br>
-                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
-                    Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
-                `);
+                // Обновляем всплывающую подсказку
+                updateMarkerPopup(marker, address, redTime, greenTime, color, timeLeft);
                 
                 // Обработчик клика на маркер для редактирования
                 marker.on('click', function(e) {
@@ -789,6 +802,22 @@
                 startTrafficLightTimer(id);
             }
             
+            // Функция обновления всплывающей подсказки маркера
+            function updateMarkerPopup(marker, address, redTime, greenTime, color, timeLeft) {
+                const nextColor = color === 'red' ? 'зеленый' : 'красный';
+                const nextColorTime = color === 'red' ? greenTime : redTime;
+                
+                marker.setPopupContent(`
+                    <div class="popup-content">
+                        <strong>${address}</strong><br>
+                        Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
+                        Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
+                        <div class="popup-timer">Осталось: ${timeLeft}сек</div>
+                        <div class="time-until-change">До ${nextColor}: ${timeLeft}сек</div>
+                    </div>
+                `);
+            }
+            
             // Функция восстановления светофора из данных
             function restoreTrafficLight(id, lightData, latlng) {
                 // Определяем цвет иконки
@@ -808,12 +837,8 @@
                     draggable: true // Делаем маркер перетаскиваемым
                 }).addTo(map);
                 
-                // Добавляем всплывающую подсказку
-                marker.bindPopup(`
-                    <strong>${lightData.address}</strong><br>
-                    Красный: ${lightData.redTime}сек, Зеленый: ${lightData.greenTime}сек<br>
-                    Текущий статус: <span style="color: ${lightData.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${lightData.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
-                `);
+                // Обновляем всплывающую подсказку
+                updateMarkerPopup(marker, lightData.address, lightData.redTime, lightData.greenTime, lightData.currentColor, lightData.timeLeft);
                 
                 // Обработчик клика на маркер для редактирования
                 marker.on('click', function(e) {
@@ -876,11 +901,7 @@
                 }));
                 
                 // Обновляем всплывающую подсказку
-                light.marker.setPopupContent(`
-                    <strong>${address}</strong><br>
-                    Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
-                    Текущий статус: <span style="color: ${color === 'red' ? '#ff4757' : '#2ed573'};">${color === 'red' ? 'Красный' : 'Зеленый'}</span>
-                `);
+                updateMarkerPopup(light.marker, address, redTime, greenTime, color, timeLeft);
                 
                 // Обновляем в Firebase
                 saveTrafficLight(id, {
@@ -918,11 +939,7 @@
                         light.address = address;
                         
                         // Обновляем всплывающую подсказку
-                        light.marker.setPopupContent(`
-                            <strong>${address}</strong><br>
-                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сеk<br>
-                            Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
-                        `);
+                        updateMarkerPopup(light.marker, address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
                         
                         // Обновляем в Firebase
                         saveTrafficLight(id, {
@@ -961,11 +978,15 @@
                 const item = document.createElement('div');
                 item.className = 'traffic-item';
                 item.setAttribute('data-id', id);
+                
+                const nextColor = light.currentColor === 'red' ? 'зеленый' : 'красный';
+                
                 item.innerHTML = `
                     <h3>${light.address}</h3>
                     <div class="timer">Осталось: ${light.timeLeft}с</div>
                     <div class="status status-${light.currentColor}">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</div>
                     <div><small>Красный: ${light.redTime}с, Зеленый: ${light.greenTime}с</small></div>
+                    <div class="time-until-change">До ${nextColor}: ${light.timeLeft}с</div>
                     <button class="edit-btn" data-id="${id}">Редактировать</button>
                     <button class="duplicate-btn" data-id="${id}">Дублировать</button>
                     <button class="delete-btn" data-id="${id}">Удалить</button>
@@ -1150,11 +1171,7 @@
                         }));
                         
                         // Обновляем всплывающую подсказку
-                        light.marker.setPopupContent(`
-                            <strong>${light.address}</strong><br>
-                            Красный: ${light.redTime}сек, Зеленый: ${light.greenTime}сек<br>
-                            Текущий статус: <span style="color: ${light.currentColor === 'red' ? '#ff4757' : '#2ed573'};">${light.currentColor === 'red' ? 'Красный' : 'Зеленый'}</span>
-                        `);
+                        updateMarkerPopup(light.marker, light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
                         
                         // Обновляем в Firebase
                         saveTrafficLight(id, {
@@ -1175,6 +1192,9 @@
                             .catch((error) => {
                                 console.error('Ошибка обновления времени:', error);
                             });
+                            
+                        // Обновляем всплывающую подсказку
+                        updateMarkerPopup(light.marker, light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
                     }
                 }, 1000);
             }
@@ -1189,11 +1209,16 @@
                 if (item) {
                     const timer = item.querySelector('.timer');
                     const status = item.querySelector('.status');
+                    const timeUntilChange = item.querySelector('.time-until-change');
                     
                     if (timer) timer.textContent = `Осталось: ${light.timeLeft}с`;
                     if (status) {
                         status.textContent = light.currentColor === 'red' ? 'Красный' : 'Зеленый';
                         status.className = `status status-${light.currentColor}`;
+                    }
+                    if (timeUntilChange) {
+                        const nextColor = light.currentColor === 'red' ? 'зеленый' : 'красный';
+                        timeUntilChange.textContent = `До ${nextColor}: ${light.timeLeft}с`;
                     }
                 }
             }
