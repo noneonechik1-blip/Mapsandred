@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
     <style>
-        /* Стили остаются без изменений */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -301,7 +300,6 @@
             }
         }
         
-        /* Новые стили для уведомлений */
         .notification {
             position: fixed;
             top: 20px;
@@ -340,7 +338,6 @@
             to { transform: rotate(360deg); }
         }
         
-        /* Новые стили для отображения времени до смены цвета */
         .time-until-change {
             font-size: 14px;
             color: #666;
@@ -751,16 +748,18 @@
                 // Добавляем маркер на карту
                 const marker = L.marker(latlng, { 
                     icon: trafficIcon,
-                    draggable: true // Делаем маркер перетаскиваемым
+                    draggable: true
                 }).addTo(map);
                 
-                // Обновляем всплывающую подсказку
-                updateMarkerPopup(marker, address, redTime, greenTime, color, timeLeft);
+                // Привязываем popup к маркеру
+                marker.bindPopup(createPopupContent(address, redTime, greenTime, color, timeLeft));
                 
                 // Обработчик клика на маркер для редактирования
                 marker.on('click', function(e) {
+                    // Открываем popup
+                    marker.openPopup();
                     editTrafficLight(id);
-                    // Останавливаем распространение события, чтобы не активировался клик по карте
+                    // Останавливаем распространение события
                     L.DomEvent.stopPropagation(e);
                 });
                 
@@ -802,12 +801,12 @@
                 startTrafficLightTimer(id);
             }
             
-            // Функция обновления всплывающей подсказки маркера
-            function updateMarkerPopup(marker, address, redTime, greenTime, color, timeLeft) {
+            // Функция создания содержимого popup
+            function createPopupContent(address, redTime, greenTime, color, timeLeft) {
                 const nextColor = color === 'red' ? 'зеленый' : 'красный';
                 const nextColorTime = color === 'red' ? greenTime : redTime;
                 
-                marker.setPopupContent(`
+                return `
                     <div class="popup-content">
                         <strong>${address}</strong><br>
                         Красный: ${redTime}сек, Зеленый: ${greenTime}сек<br>
@@ -815,7 +814,7 @@
                         <div class="popup-timer">Осталось: ${timeLeft}сек</div>
                         <div class="time-until-change">До ${nextColor}: ${timeLeft}сек</div>
                     </div>
-                `);
+                `;
             }
             
             // Функция восстановления светофора из данных
@@ -834,16 +833,18 @@
                 // Добавляем маркер на карту
                 const marker = L.marker(latlng, { 
                     icon: trafficIcon,
-                    draggable: true // Делаем маркер перетаскиваемым
+                    draggable: true
                 }).addTo(map);
                 
-                // Обновляем всплывающую подсказку
-                updateMarkerPopup(marker, lightData.address, lightData.redTime, lightData.greenTime, lightData.currentColor, lightData.timeLeft);
+                // Привязываем popup к маркеру
+                marker.bindPopup(createPopupContent(lightData.address, lightData.redTime, lightData.greenTime, lightData.currentColor, lightData.timeLeft));
                 
                 // Обработчик клика на маркер для редактирования
                 marker.on('click', function(e) {
+                    // Открываем popup
+                    marker.openPopup();
                     editTrafficLight(id);
-                    // Останавливаем распространение события, чтобы не активировался клик по карте
+                    // Останавливаем распространение события
                     L.DomEvent.stopPropagation(e);
                 });
                 
@@ -901,7 +902,7 @@
                 }));
                 
                 // Обновляем всплывающую подсказку
-                updateMarkerPopup(light.marker, address, redTime, greenTime, color, timeLeft);
+                light.marker.setPopupContent(createPopupContent(address, redTime, greenTime, color, timeLeft));
                 
                 // Обновляем в Firebase
                 saveTrafficLight(id, {
@@ -939,7 +940,7 @@
                         light.address = address;
                         
                         // Обновляем всплывающую подсказку
-                        updateMarkerPopup(light.marker, address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
+                        light.marker.setPopupContent(createPopupContent(address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
                         
                         // Обновляем в Firebase
                         saveTrafficLight(id, {
@@ -1171,7 +1172,7 @@
                         }));
                         
                         // Обновляем всплывающую подсказку
-                        updateMarkerPopup(light.marker, light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
+                        light.marker.setPopupContent(createPopupContent(light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
                         
                         // Обновляем в Firebase
                         saveTrafficLight(id, {
@@ -1194,7 +1195,7 @@
                             });
                             
                         // Обновляем всплывающую подсказку
-                        updateMarkerPopup(light.marker, light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft);
+                        light.marker.setPopupContent(createPopupContent(light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
                     }
                 }, 1000);
             }
