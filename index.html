@@ -75,6 +75,7 @@
             width: 100%;
             border-radius: 8px;
             z-index: 1;
+            touch-action: auto !important; /* Разрешаем скролл на мобильных */
         }
         
         .controls {
@@ -320,6 +321,15 @@
             .map-container, .controls {
                 min-width: 100%;
             }
+            
+            body {
+                overflow: auto; /* Разрешаем скролл на мобильных */
+                height: auto;
+            }
+            
+            .container {
+                height: auto;
+            }
         }
         
         .notification {
@@ -414,6 +424,12 @@
         .traffic-list::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
+        /* Стили для мобильной прокрутки */
+        .scrollable-content {
+            -webkit-overflow-scrolling: touch;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -430,7 +446,7 @@
             </div>
             
             <div class="controls">
-                <div class="form-container">
+                <div class="form-container scrollable-content">
                     <div class="current-selection" id="current-selection">
                         <h3>Новый светофор</h3>
                         <p>Адрес: <span id="selected-address">не выбран</span></p>
@@ -483,7 +499,7 @@
                         <button id="duplicate-light" style="display: none; background: #3742fa;">Дублировать</button>
                     </div>
                     
-                    <div class="traffic-list">
+                    <div class="traffic-list scrollable-content">
                         <h2>Активные светофоры</h2>
                         <div id="lights-container">
                             <!-- Список светофоров будет здесь -->
@@ -533,7 +549,9 @@
             
             // Добавление слоя OpenStreetMap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                // Улучшаем работу с тач-устройствами
+                tap: false
             }).addTo(map);
             
             const addButton = document.getElementById('add-light');
@@ -562,6 +580,11 @@
             let editingLightId = null;
             let movingLightId = null;
             let globalTimer = null;
+            let lastUpdateTime = Date.now();
+            
+            // Улучшаем работу с тач-устройствами
+            map.touchZoom.addTo(map);
+            map.scrollWheelZoom.enable();
             
             // Функция для показа уведомлений
             function showNotification(message, type = 'success') {
@@ -950,11 +973,15 @@
                 }
                 
                 globalTimer = setInterval(function() {
+                    const now = Date.now();
+                    const deltaTime = Math.floor((now - lastUpdateTime) / 1000); // Разница в секундах
+                    lastUpdateTime = now;
+                    
                     for (const id in lights) {
                         const light = lights[id];
                         
                         if (light.timeLeft > 0) {
-                            light.timeLeft--;
+                            light.timeLeft = Math.max(0, light.timeLeft - deltaTime);
                             
                             // Обновляем отображение
                             updateLightDisplay(id);
@@ -1330,6 +1357,19 @@
             setTimeout(() => {
                 map.invalidateSize();
             }, 100);
+            
+            // Улучшаем работу с мобильными устройствами - разрешаем скролл
+            document.addEventListener('touchmove', function(e) {
+                // Разрешаем скролл для элементов с классом scrollable-content
+                if (e.target.closest('.scrollable-content') || e.target.closest('.leaflet-popup-content')) {
+                    return;
+                }
+                
+                // Для карты разрешаем скролл только если это не одиночное касание
+                if (e.touches.length === 1 && e.target.closest('#map')) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
         });
     </script>
 </body>
