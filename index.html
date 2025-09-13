@@ -430,6 +430,13 @@
             -webkit-overflow-scrolling: touch;
             overflow-y: auto;
         }
+        
+        /* Улучшаем скролл на мобильных */
+        .mobile-scroll-fix {
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
     </style>
 </head>
 <body>
@@ -445,7 +452,7 @@
                 <div id="connection-status" class="connection-status">Проверка подключения...</div>
             </div>
             
-            <div class="controls">
+            <div class="controls mobile-scroll-fix"> <!-- Добавлен класс для улучшения скролла -->
                 <div class="form-container scrollable-content">
                     <div class="current-selection" id="current-selection">
                         <h3>Новый светофор</h3>
@@ -646,7 +653,7 @@
                         showNotification("Данные загружены успешно");
                         
                         // Запускаем глобальный таймер после загрузки данных
-                        if (!globalTimer) {
+                        if (!globalTimer && Object.keys(data).length > 0) {
                             startGlobalTimer();
                         }
                     } else {
@@ -972,16 +979,22 @@
                     clearInterval(globalTimer);
                 }
                 
+                lastUpdateTime = Date.now(); // Устанавливаем начальное время
+                
                 globalTimer = setInterval(function() {
                     const now = Date.now();
                     const deltaTime = Math.floor((now - lastUpdateTime) / 1000); // Разница в секундах
                     lastUpdateTime = now;
                     
+                    // Если разница слишком большая (например, при восстановлении вкладки), ограничиваем ее
+                    const maxDelta = 10;
+                    const actualDelta = Math.min(deltaTime, maxDelta);
+                    
                     for (const id in lights) {
                         const light = lights[id];
                         
                         if (light.timeLeft > 0) {
-                            light.timeLeft = Math.max(0, light.timeLeft - deltaTime);
+                            light.timeLeft = Math.max(0, light.timeLeft - actualDelta);
                             
                             // Обновляем отображение
                             updateLightDisplay(id);
@@ -1359,17 +1372,7 @@
             }, 100);
             
             // Улучшаем работу с мобильными устройствами - разрешаем скролл
-            document.addEventListener('touchmove', function(e) {
-                // Разрешаем скролл для элементов с классом scrollable-content
-                if (e.target.closest('.scrollable-content') || e.target.closest('.leaflet-popup-content')) {
-                    return;
-                }
-                
-                // Для карты разрешаем скролл только если это не одиночное касание
-                if (e.touches.length === 1 && e.target.closest('#map')) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
+            // Удаляем проблемный обработчик, который мешал скроллу
         });
     </script>
 </body>
