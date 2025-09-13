@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
     <style>
+        /* Стили остаются без изменений */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -468,7 +469,7 @@
             const map = L.map('map').setView([50.2839, 57.1667], 13);
             
             // Добавление слоя OpenStreetMap
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}/.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
             
@@ -496,6 +497,7 @@
             let currentColor = 'red';
             let editingLightId = null;
             let movingLightId = null;
+            let globalTimer = null;
             
             // Функция для показа уведомлений
             function showNotification(message, type = 'success') {
@@ -532,9 +534,6 @@
                         if (lights[id].marker && lights[id].marker.remove) {
                             lights[id].marker.remove();
                         }
-                        if (lights[id].intervalId) {
-                            clearInterval(lights[id].intervalId);
-                        }
                     }
                     lights = {};
                     lightsContainer.innerHTML = '';
@@ -554,6 +553,11 @@
                             }
                         });
                         showNotification("Данные загружены успешно");
+                        
+                        // Запускаем глобальный таймер после загрузки данных
+                        if (!globalTimer) {
+                            startGlobalTimer();
+                        }
                     } else {
                         showNotification("Нет данных для загрузки");
                     }
@@ -779,8 +783,7 @@
                     greenTime: greenTime,
                     currentColor: color,
                     timeLeft: timeLeft,
-                    marker: marker,
-                    intervalId: null
+                    marker: marker
                 };
                 
                 // Сохраняем в Firebase
@@ -797,14 +800,15 @@
                 // Добавляем в список
                 addToLightsList(id);
                 
-                // Запускаем таймер
-                startTrafficLightTimer(id);
+                // Запускаем глобальный таймер, если он еще не запущен
+                if (!globalTimer) {
+                    startGlobalTimer();
+                }
             }
             
             // Функция создания содержимого popup
             function createPopupContent(address, redTime, greenTime, color, timeLeft) {
                 const nextColor = color === 'red' ? 'зеленый' : 'красный';
-                const nextColorTime = color === 'red' ? greenTime : redTime;
                 
                 return `
                     <div class="popup-content">
@@ -864,26 +868,79 @@
                     greenTime: lightData.greenTime,
                     currentColor: lightData.currentColor,
                     timeLeft: lightData.timeLeft,
-                    marker: marker,
-                    intervalId: null
+                    marker: marker
                 };
                 
                 // Добавляем в список
                 addToLightsList(id);
+            }
+            
+            // Функция запуска глобального таймера
+            function startGlobalTimer() {
+                if (globalTimer) {
+                    clearInterval(globalTimer);
+                }
                 
-                // Запускаем таймер
-                startTrafficLightTimer(id);
+                globalTimer = setInterval(function() {
+                    for (const id in lights) {
+                        const light = lights[id];
+                        
+                        if (light.timeLeft > 0) {
+                            light.timeLeft--;
+                            
+                            // Обновляем отображение
+                            updateLightDisplay(id);
+                            
+                            // Если время истекло, переключаем цвет
+                            if (light.timeLeft <= 0) {
+                                if (light.currentColor === 'red') {
+                                    light.currentColor = 'green';
+                                    light.timeLeft = light.greenTime;
+                                } else {
+                                    light.currentColor = 'red';
+                                    light.timeLeft = light.redTime;
+                                }
+                                
+                                // Обновляем иконку маркера
+                                const iconColor = light.currentColor === 'red' ? '#ff4757' : '#2ed573';
+                                light.marker.setIcon(L.divIcon({
+                                    className: 'traffic-icon',
+                                    html: `<div style="background-color: ${iconColor}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>`,
+                                    iconSize: [24, 24],
+                                    iconAnchor: [12, 12]
+                                }));
+                                
+                                // Обновляем в Firebase
+                                saveTrafficLight(id, {
+                                    address: light.address,
+                                    lat: light.lat,
+                                    lng: light.lng,
+                                    redTime: light.redTime,
+                                    greenTime: light.greenTime,
+                                    currentColor: light.currentColor,
+                                    timeLeft: light.timeLeft
+                                });
+                            } else {
+                                // Обновляем только время в Firebase каждые 5 секунд
+                                if (light.timeLeft % 5 === 0) {
+                                    database.ref('trafficLights/' + id + '/timeLeft').set(light.timeLeft)
+                                        .catch((error) => {
+                                            console.error('Ошибка обновления времени:', error);
+                                        });
+                                }
+                            }
+                            
+                            // Обновляем всплывающую подсказку
+                            light.marker.setPopupContent(createPopupContent(light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
+                        }
+                    }
+                }, 1000);
             }
             
             // Функция обновления светофора
             function updateTrafficLight(id, address, redTime, greenTime, color, timeLeft) {
                 const light = lights[id];
                 if (!light) return;
-                
-                // Останавливаем текущий таймер
-                if (light.intervalId) {
-                    clearInterval(light.intervalId);
-                }
                 
                 // Обновляем данные
                 light.address = address;
@@ -917,9 +974,6 @@
                 
                 // Обновляем отображение в списке
                 updateLightDisplay(id);
-                
-                // Запускаем таймер
-                startTrafficLightTimer(id);
             }
             
             // Функция перемещения светофора
@@ -1136,70 +1190,6 @@
                 selectedLatLng = null;
             }
             
-            // Функция запуска таймера светофора
-            function startTrafficLightTimer(id) {
-                const light = lights[id];
-                if (!light) return;
-                
-                // Останавливаем предыдущий таймер, если он был
-                if (light.intervalId) {
-                    clearInterval(light.intervalId);
-                }
-                
-                light.intervalId = setInterval(function() {
-                    light.timeLeft--;
-                    
-                    // Обновляем отображение
-                    updateLightDisplay(id);
-                    
-                    // Если время истекло, переключаем цвет
-                    if (light.timeLeft <= 0) {
-                        if (light.currentColor === 'red') {
-                            light.currentColor = 'green';
-                            light.timeLeft = light.greenTime;
-                        } else {
-                            light.currentColor = 'red';
-                            light.timeLeft = light.redTime;
-                        }
-                        
-                        // Обновляем иконку маркера
-                        const iconColor = light.currentColor === 'red' ? '#ff4757' : '#2ed573';
-                        light.marker.setIcon(L.divIcon({
-                            className: 'traffic-icon',
-                            html: `<div style="background-color: ${iconColor}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>`,
-                            iconSize: [24, 24],
-                            iconAnchor: [12, 12]
-                        }));
-                        
-                        // Обновляем всплывающую подсказку
-                        light.marker.setPopupContent(createPopupContent(light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
-                        
-                        // Обновляем в Firebase
-                        saveTrafficLight(id, {
-                            address: light.address,
-                            lat: light.lat,
-                            lng: light.lng,
-                            redTime: light.redTime,
-                            greenTime: light.greenTime,
-                            currentColor: light.currentColor,
-                            timeLeft: light.timeLeft
-                        });
-                        
-                        // Обновляем отображение
-                        updateLightDisplay(id);
-                    } else {
-                        // Обновляем только время в Firebase
-                        database.ref('trafficLights/' + id + '/timeLeft').set(light.timeLeft)
-                            .catch((error) => {
-                                console.error('Ошибка обновления времени:', error);
-                            });
-                            
-                        // Обновляем всплывающую подсказку
-                        light.marker.setPopupContent(createPopupContent(light.address, light.redTime, light.greenTime, light.currentColor, light.timeLeft));
-                    }
-                }, 1000);
-            }
-            
             // Функция обновления отображения светофора
             function updateLightDisplay(id) {
                 const light = lights[id];
@@ -1229,11 +1219,6 @@
                 const light = lights[id];
                 if (!light) return;
                 
-                // Останавливаем таймер
-                if (light.intervalId) {
-                    clearInterval(light.intervalId);
-                }
-                
                 // Удаляем с карты
                 if (light.marker && light.marker.remove) {
                     light.marker.remove();
@@ -1255,6 +1240,12 @@
                 if (editingLightId === id) {
                     resetForm();
                     exitEditMode();
+                }
+                
+                // Если светофоров не осталось, останавливаем глобальный таймер
+                if (Object.keys(lights).length === 0 && globalTimer) {
+                    clearInterval(globalTimer);
+                    globalTimer = null;
                 }
             }
             
