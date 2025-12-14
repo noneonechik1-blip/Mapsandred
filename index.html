@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Kia Rio 2014 — 3D блок предохранителей</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#0f172a;color:#e5e7eb;font-family:system-ui}
+#ui{position:absolute;top:16px;left:16px;z-index:10;background:#020617e6;padding:14px 16px;border-radius:12px;width:320px}
+h2{margin:0 0 8px 0;font-size:18px}
+.label{font-size:13px;color:#94a3b8}
+.value{margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="ui">
+  <h2>Kia Rio 2014</h2>
+  <div class="label">Кликните по предохранителю</div>
+</div><script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js';
+
+const fuses = [
+ {id:1,amps:15,desc:'Обогрев зоны покоя щеток'},
+ {id:2,amps:15,desc:'Дополнительная розетка'},
+ {id:3,amps:15,desc:'Прикуриватель'},
+ {id:4,amps:10,desc:'Аудио / BCM / ключ'},
+ {id:5,amps:10,desc:'Airbag OFF'},
+ {id:6,amps:10,desc:'SRS'},
+ {id:7,amps:10,desc:'Аварийная сигнализация'},
+ {id:8,amps:null,desc:'Резерв'},
+ {id:9,amps:null,desc:'Резерв'},
+ {id:10,amps:15,desc:'Задний стеклоочиститель'}
+];
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020617);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(0,6,10);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
+const light = new THREE.DirectionalLight(0xffffff,0.8);
+light.position.set(5,10,5);
+scene.add(light);
+
+// корпус
+const base = new THREE.Mesh(
+  new THREE.BoxGeometry(9,0.8,5.5),
+  new THREE.MeshStandardMaterial({color:0x1e293b})
+);
+scene.add(base);
+
+const fuseMeshes = [];
+
+fuses.forEach((f,i)=>{
+  const color = f.amps===10?0x991b1b:f.amps===15?0x1e40af:0x374151;
+  const mat = new THREE.MeshStandardMaterial({color});
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.6),mat);
+  mesh.position.set(-4 + i*0.9,1,0);
+  mesh.userData = f;
+  scene.add(mesh);
+  fuseMeshes.push(mesh);
+});
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const ui = document.getElementById('ui');
+let active = null;
+
+window.addEventListener('pointerdown', (e)=>{
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(fuseMeshes);
+  if(hits.length){
+    if(active) active.material.emissive.set(0x000000);
+    const m = hits[0].object;
+    m.material.emissive = new THREE.Color(0x38bdf8);
+    active = m;
+    const f = m.userData;
+    ui.innerHTML = `<h2>Предохранитель №${f.id}</h2>
+      <div class='label'>Номинал</div><div class='value'>${f.amps?f.amps+' A':'Резерв'}</div>
+      <div class='label'>Назначение</div><div class='value'>${f.desc}</div>`;
+  }
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script></body>
+</html>
